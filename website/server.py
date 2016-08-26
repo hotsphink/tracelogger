@@ -18,6 +18,8 @@ class TraceLoggerRequestHandler(SimpleHTTPRequestHandler):
            files). Directory listings, *.json, and *.tl files are resolved
            relative to the data directory.
         '''
+        if url_path == '/':
+            return os.path.abspath("tracelogger.html")
         path = SimpleHTTPRequestHandler.translate_path(self, url_path)
         if path is None:
             return path
