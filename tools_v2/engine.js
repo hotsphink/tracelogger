@@ -93,6 +93,10 @@ DataTree.prototype.size = function() {
   return this.buffer.byteLength;
 }
 
+DataTree.prototype.length = function() {
+  return this.size() / this.itemSize;
+}
+
 DataTree.prototype.head = function() {
   return 0;
 }
@@ -265,6 +269,13 @@ Overview.prototype.isScriptInfo = function(tag) {
 
 Overview.prototype.clearScriptInfo = function(tag) {
   return tag == "G" || tag == "g";
+}
+
+Overview.prototype.dumpTree = function() {
+  var tree = this.tree;
+  for (let [ i, len ] = [ 0, tree.length() ]; i < len; i++) {
+    print(`[${i}] time=<${tree.start(i)},${tree.stop(i)}> nextId=${tree.nextId(i)} hasChildren=${tree.hasChilds(i)} firstChild=${tree.firstChild(i)} {${tree.textId(i)}} ${tree.text(i)}`);
+  }
 }
 
 Overview.prototype.processTreeItem = function(script, id) {

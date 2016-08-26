@@ -10,6 +10,14 @@ if (data["corrections"]) {
     fullOverview.scriptOverview = corrections.scriptOverview;
     fullOverview.scriptTimes = corrections.scriptTimes;
 }
-fullOverview.init();
 
-print(JSON.stringify({engineOverview:fullOverview.engineOverview, scriptOverview:fullOverview.scriptOverview, scriptTimes:fullOverview.scriptTimes}, null, 4));
+if (scriptArgs[0] == '--dump') {
+  fullOverview.dumpTree();
+} else {
+  fullOverview.init();
+  print(JSON.stringify({
+    engineOverview: fullOverview.engineOverview,
+    scriptOverview: fullOverview.scriptOverview,
+    scriptTimes: fullOverview.scriptTimes
+  }, null, 4));
+}

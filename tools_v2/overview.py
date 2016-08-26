@@ -6,8 +6,14 @@ import shutil
 import os
 
 argparser = argparse.ArgumentParser(description='Returns an overview of the mainthread.')
-argparser.add_argument('js_shell', help='a js shell environment')
-argparser.add_argument('js_file', help='the js file to parse')
+argparser.add_argument('js_shell',
+                       help='a js shell environment')
+argparser.add_argument('js_file',
+                       help='the js file to parse')
+argparser.add_argument('--dump', action='store_true',
+                       help='dump the linear stream of tree info instead of an overview')
+argparser.add_argument('--tree-file', '--thread', '-t',
+                       help='tree file or index for the thread to examine (default is the largest file)')
 args = argparser.parse_args()
 
 jsfile = os.path.abspath(args.js_file);
@@ -19,21 +25,33 @@ datapwd = os.path.dirname(jsfile)
 with open(jsfile, "r") as fp:
     data = json.load(fp)
 
-# Guess the mainthread for which we want to generate an overview
-# We guess by taking the entry which has the largest tree.
-max_size = 0
-entry = None
-for datum in data:
-    statinfo = os.stat(datapwd + "/" + datum["tree"])
-    if statinfo.st_size > max_size:
-        max_size = statinfo.st_size
-        entry = datum
+if args.tree_file is not None:
+    select = [d for d in data if args.tree_file == d["tree"]]
+    if len(select) == 0:
+        substr = "." + args.tree_file + "."
+        select = [d for d in data if substr in d["tree"]]
+    entry = select[0]
+else:
+    # Guess the mainthread for which we want to generate an overview
+    # We guess by taking the entry which has the largest tree.
+    max_size = 0
+    entry = None
+    for datum in data:
+        statinfo = os.stat(datapwd + "/" + datum["tree"])
+        if statinfo.st_size > max_size:
+            max_size = statinfo.st_size
+            entry = datum
 
 overview = [
     args.js_shell,
     "-e",
     "var data = " + json.dumps(entry),
     "-f",
-    pwd+"/overview.js"
+    pwd+"/overview.js",
+    "--"
 ]
+
+if args.dump:
+    overview.append('--dump')
+
 subprocess.call(overview)
