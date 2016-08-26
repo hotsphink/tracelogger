@@ -12,4 +12,4 @@ if (data["corrections"]) {
 }
 fullOverview.init();
 
-print(JSON.stringify({engineOverview:fullOverview.engineOverview, scriptOverview:fullOverview.scriptOverview, scriptTimes:fullOverview.scriptTimes}));
+print(JSON.stringify({engineOverview:fullOverview.engineOverview, scriptOverview:fullOverview.scriptOverview, scriptTimes:fullOverview.scriptTimes}, null, 4));
