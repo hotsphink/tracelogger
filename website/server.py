@@ -6,18 +6,27 @@ import sys
 
 datadir = None
 
+def trace(f):
+    def traced(obj, arg):
+        result = f(obj, arg)
+        print("%s -> %s" % (arg, result))
+        return result
+    return traced
+
 class TraceLoggerRequestHandler(SimpleHTTPRequestHandler):
     # Add CORS header
     def end_headers (self):
         self.send_header('Access-Control-Allow-Origin', '*')
         SimpleHTTPRequestHandler.end_headers(self)
 
+    @trace
     def translate_path(self, url_path):
         '''Pass through most commands to the default translation, which resolves
            relative to the current working directory (containing the website/
            files). Directory listings, *.json, and *.tl files are resolved
            relative to the data directory.
         '''
+        print("translate_path " + url_path)
         if url_path == '/':
             return os.path.abspath("tracelogger.html")
         path = SimpleHTTPRequestHandler.translate_path(self, url_path)
