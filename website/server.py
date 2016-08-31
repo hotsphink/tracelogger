@@ -29,6 +29,7 @@ class TraceLoggerRequestHandler(SimpleHTTPRequestHandler):
         print("translate_path " + url_path)
         if url_path == '/':
             return os.path.abspath("tracelogger.html")
+
         path = SimpleHTTPRequestHandler.translate_path(self, url_path)
         if path is None:
             return path

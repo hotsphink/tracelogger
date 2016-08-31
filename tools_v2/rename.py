@@ -38,7 +38,6 @@ if not isinstance(data, list):
     redir_file = jsfile
     print("Have redir file = " + redir_file)
     jsfile = os.path.join(dirname(jsfile), data)
-    import pdb; pdb.set_trace()
     with open(jsfile, "r") as fp:
         data = json.load(fp)
 
@@ -80,6 +79,11 @@ for j in range(len(data)):
     action(datapwd+"/"+data[j]["dict"], ndict)
     data[j]["dict"] = basename(ndict)
 
+    if "corrections" in data[j]:
+        corrections = new_name+".corrections."+str(j)+".json"
+        action(datapwd+"/"+data[j]["corrections"], corrections)
+        data[j]["corrections"] = basename(corrections)
+
 # Create new jsfile
 with open(new_name+".json", "w") as fp:
     json.dump(data, fp)
@@ -88,6 +92,8 @@ print("Wrote %s.json" % new_name)
 # Recreate the redirection file in the destination directory, if we used a
 # redirection file in the first place.
 if redir_file:
+    if not args.keep:
+        os.remove(redir_file)
     new_redir_file = os.path.join(dirname(new_name), "tl-data.json")
     print("Writing " + new_redir_file)
     with open(new_redir_file, "w") as fp:

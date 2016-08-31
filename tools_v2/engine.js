@@ -1,3 +1,6 @@
+// Test if in worker
+var worker = (typeof importScripts === 'function');
+
 if (typeof window === 'undefined') {
   var running = []
   function setTimeout(func, time) {
@@ -34,6 +37,8 @@ function TextToColor(textmap) {
     }));
 
   this.map = {};
+  this.mapId = [];
+
   var usedColors = 0;
   for(var i=0; i<textmap.length; i++) {
     var color = textColor.get(textmap[i]);
@@ -44,11 +49,16 @@ function TextToColor(textmap) {
           color = colors[(usedColors++) % colors.length];
     }
     this.map[textmap[i]] = color;
+    this.mapId[i] = color;
   }
 }
 
 TextToColor.prototype.getColor = function(text) {
   return this.map[text];
+}
+
+TextToColor.prototype.getColorFromId = function(textId) {
+  return this.mapId[textId];
 }
 
 TextToColor.prototype.getColorMap = function() {
@@ -126,7 +136,7 @@ DataTree.prototype.text = function(id) {
 }
 
 DataTree.prototype.color = function(id) {
-  return this.colors.getColor(this.text(id));
+  return this.colors.getColorFromId(this.textId(id));
 }
 
 DataTree.prototype.nextId = function(id) {
@@ -150,7 +160,7 @@ DataTree.prototype.childs = function(id) {
   if (!this.hasChilds(id))
     return [];
 
-  var childs = []  
+  var childs = []
   var i = this.firstChild(id);
   while (true) {
     childs[childs.length] = i;
@@ -235,6 +245,7 @@ function Overview(tree, settings) {
   this.tree = tree;
   this.settings = settings;
   this.engineOverview = {}
+  this.engineAmount = {}
   this.scriptOverview = {}
   this.scriptTimes = {}
 
@@ -244,23 +255,61 @@ function Overview(tree, settings) {
 
   if (typeof this.settings.maxThreshold == "undefined")
     this.settings.maxThreshold = 0;
-
-  // hack to increase speed 3fold
-  /*
-  for (var i=0; i < tree.textmap.length; i++) {
-    var info = tree.textmap[i].split(",");
-    if (this.hasScriptInfo(info[0])) {
-      var script = this.getScriptInfo(info);
-      this.scriptOverview[script] = {};
-      this.scriptTimes[script] = {"c":0, "s":0};
-    }
-  }*/
+  if (typeof this.settings.clip_start == "undefined")
+      this.settings.clip_start = this.tree.start(0);
+  if (typeof this.settings.clip_stop == "undefined")
+      this.settings.clip_stop = this.tree.stop(0);
 
   this.visit = 0
 }
 
 Overview.prototype.init = function() {
-  this.processQueue();
+  if (worker) {
+    this.processQueue();
+  } else {
+      var chunk_cb = this.settings.chunk_cb;
+      this.settings.chunk_cb = null;
+
+      var wor = new Worker('engine.js');
+      wor.addEventListener('message', function(e) {
+          this.engineOverview = e.data.engineOverview;
+          this.engineAmount = e.data.engineAmount;
+          this.scriptOverview = e.data.scriptOverview;
+          this.scriptTimes = e.data.scriptTimes;
+          chunk_cb();
+      }.bind(this), false);
+
+      wor.postMessage({type: "overview",
+                       buffer:this.tree.buffer,
+                       textmap:this.tree.textmap,
+                       settings:this.settings});
+      this.settings.chunk_cb = chunk_cb;
+  }
+}
+
+if (worker) {
+    addEventListener('message', function(e) {
+        if (e.data.type == "overview") {
+            var overview;
+            e.data.settings.chunk_cb = function() {
+                self.postMessage({
+                    engineOverview: overview.engineOverview,
+                    engineAmount: overview.engineAmount,
+                    scriptOverview: overview.scriptOverview,
+                    scriptTimes: overview.scriptTimes,
+                });
+            }
+            overview = new Overview(new DataTree(e.data.buffer, e.data.textmap), e.data.settings);
+            overview.init();
+        }
+    });
+}
+
+Overview.prototype.setClip = function(start, stop) {
+  this.settings.clip_start = start;
+  this.settings.clip_stop = stop;
+  this.reset();
+  this.init();
 }
 
 Overview.prototype.isScriptInfo = function(tag) {
@@ -278,9 +327,25 @@ Overview.prototype.dumpTree = function() {
   }
 }
 
+Overview.prototype.clippedTime = function(start, stop) {
+  if (stop < this.settings.clip_start)
+      return;
+  if (start > this.settings.clip_stop)
+      return;
+  if (start < this.settings.clip_start)
+      start = this.settings.clip_start
+  if (stop > this.settings.clip_stop)
+      stop = this.settings.clip_stop
+  return stop - start;
+};
+
 Overview.prototype.processTreeItem = function(script, id) {
   this.visit += 1
-  var time = this.tree.stop(id) - this.tree.start(id);
+  var start = this.tree.start(id);
+  var stop = this.tree.stop(id);
+  var time = this.clippedTime(start, stop);
+  if (time === undefined)
+    return;
   var info = this.tree.text(id);
 
   if (this.clearScriptInfo(info))
@@ -293,7 +358,9 @@ Overview.prototype.processTreeItem = function(script, id) {
 
   var childs = this.tree.childs(id);
   for (var i = 0; i < childs.length; i++) {
-    var childTime = this.tree.stop(childs[i]) - this.tree.start(childs[i]);
+    var childTime = this.clippedTime(this.tree.start(childs[i]), this.tree.stop(childs[i]));
+    if (childTime === undefined)
+        continue;
 
     if (childTime >= this.settings.maxThreshold) {
        if (childTime < this.threshold) {
@@ -314,7 +381,10 @@ Overview.prototype.processTreeItem = function(script, id) {
   if (time > 0 && !this.isScriptInfo(info)) {
     if (!this.engineOverview[info])
       this.engineOverview[info] = 0;
+    if (!this.engineAmount[info])
+      this.engineAmount[info] = 0;
     this.engineOverview[info] += time;
+    this.engineAmount[info]++;
   }
 
   if (script != "") {
@@ -340,7 +410,7 @@ Overview.prototype.processQueue = function () {
 
   if (this.settings.chunk_cb)
     this.settings.chunk_cb(this);
-  
+
   if (this.queue.length > 0) {
     setTimeout(Overview.prototype.processQueue.bind(this), 1);
     return;
@@ -367,7 +437,7 @@ Overview.prototype.processQueueSeq = function () {
 
     if (this.settings.chunk_cb)
       this.settings.chunk_cb(this);
-    
+
     if (this.queue.length > 0)
       continue;
 
@@ -385,6 +455,11 @@ Overview.prototype.processQueueSeq = function () {
 }
 
 Overview.prototype.reset = function() {
-    this.queue = []
+    this.queue = [["",0]]
     this.futureQueue = []
+    this.engineOverview = {}
+    this.engineAmount = {}
+    this.scriptOverview = {}
+    this.scriptTimes = {}
+    this.threshold = (this.tree.stop(0) - this.tree.start(0));
 }
